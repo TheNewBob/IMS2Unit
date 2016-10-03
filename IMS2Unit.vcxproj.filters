@@ -11,6 +11,9 @@
     <Filter Include="Misc">
       <UniqueIdentifier>{1812fe9b-07eb-4ed4-9ca1-88d02076e4fe}</UniqueIdentifier>
     </Filter>
+    <Filter Include="SimpleShapeTests">
+      <UniqueIdentifier>{c4ccdd8a-79d2-45c1-9d31-a989cd4db845}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FiringSolutionUtils.h">
@@ -24,6 +27,9 @@
     </ClInclude>
     <ClInclude Include="stdafx.h">
       <Filter>Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="SimpleShapeUtils.h">
+      <Filter>SimpleShapeTests</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -41,6 +47,12 @@
     </ClCompile>
     <ClCompile Include="FSThrusterCollectionTest.cpp">
       <Filter>FiringSolutionTests</Filter>
+    </ClCompile>
+    <ClCompile Include="SimpleShapeTest.cpp">
+      <Filter>SimpleShapeTests</Filter>
+    </ClCompile>
+    <ClCompile Include="SimpleShapeUtils.cpp">
+      <Filter>SimpleShapeTests</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

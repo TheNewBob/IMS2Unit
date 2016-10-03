@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "CppUnitTest.h"
+#include "Common.h"
 #include "TestUtils.h"
-#include "common.h"
 #include "FiringSolutionThruster.h"
 #include "FSThrusterCollection.h"
 #include "Calc.h"

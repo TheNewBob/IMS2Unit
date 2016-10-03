@@ -21,6 +21,11 @@ public:
 	 */
 	static const wchar_t *LastMessage();
 
+	/**
+	 * \brief returns a string representing a VECTOR3 in the format x, y, z
+	 */
+	static string V3ToString(VECTOR3 v);
+
 private:
 	static string message;
 };

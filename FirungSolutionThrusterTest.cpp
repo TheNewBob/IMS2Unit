@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "CppUnitTest.h"
+#include "Common.h"
 #include "TestUtils.h"
-#include "common.h"
 #include "FiringSolutionThruster.h"
 #include "Calc.h"
 #include "FiringSolutionUtils.h"
@@ -19,7 +19,7 @@ namespace IMS2Unit
 			TEST_DESCRIPTION(L"Tests thrusters in the six cardinal directions, located on the center of mass, so there's no torque")
 		END_TEST_METHOD_ATTRIBUTE()
 
-			TEST_METHOD(NoTorqueTest)
+		TEST_METHOD(NoTorqueTest)
 		{
 			Logger::WriteMessage(L"\n\nTest: NoTorqueTest\n");
 

@@ -36,3 +36,10 @@ void TestUtils::SetMessage(string msg)
 	Logger::WriteMessage(Msg(msg));
 	message = msg;
 }
+
+string TestUtils::V3ToString(VECTOR3 v)
+{
+	stringstream ss;
+	ss << v.x << ", " << v.y << ", " << v.z;
+	return ss.str();
+}
