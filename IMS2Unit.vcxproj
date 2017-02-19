@@ -101,6 +101,7 @@
     <Link>
       <AdditionalLibraryDirectories>..\lib;$(SolutionDir)\Test\lib;$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>IMS2.lib;Orbiter.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -113,6 +114,7 @@
   <ItemGroup>
     <ClCompile Include="FiringSolutionUtils.cpp" />
     <ClCompile Include="FSThrusterCollectionTest.cpp" />
+    <ClCompile Include="PowerCircuitTests.cpp" />
     <ClCompile Include="SimpleShapeTest.cpp" />
     <ClCompile Include="SimpleShapeUtils.cpp" />
     <ClCompile Include="stdafx.cpp">

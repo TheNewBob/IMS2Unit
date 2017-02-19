@@ -41,7 +41,7 @@ namespace IMS2Unit
 				bool condition = FiringSolutionUtils::IsThrusterInThisManyGroups(thrusters[i], 1);
 				Assert::IsTrue(condition, TestUtils::LastMessage());
 			}
-
+			
 			bool condition = FiringSolutionUtils::IsThrusterInGroup(thrusters[0], THGROUP_ATT_RIGHT);
 			Assert::IsTrue(condition, TestUtils::LastMessage());
 

@@ -14,6 +14,9 @@
     <Filter Include="SimpleShapeTests">
       <UniqueIdentifier>{c4ccdd8a-79d2-45c1-9d31-a989cd4db845}</UniqueIdentifier>
     </Filter>
+    <Filter Include="PowerDistributionTests">
+      <UniqueIdentifier>{feba9c5f-9193-4c85-bb0d-5a8b22d23919}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FiringSolutionUtils.h">
@@ -53,6 +56,9 @@
     </ClCompile>
     <ClCompile Include="SimpleShapeUtils.cpp">
       <Filter>SimpleShapeTests</Filter>
+    </ClCompile>
+    <ClCompile Include="PowerCircuitTests.cpp">
+      <Filter>PowerDistributionTests</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

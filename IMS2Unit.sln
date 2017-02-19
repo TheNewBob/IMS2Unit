@@ -20,6 +20,7 @@ Global
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{DF58B03D-4C99-4C27-A4F4-3A89F506D6C2}.Debug D3D9|Win32.ActiveCfg = Debug|Win32
 		{DF58B03D-4C99-4C27-A4F4-3A89F506D6C2}.Debug|Win32.ActiveCfg = Debug|Win32
+		{DF58B03D-4C99-4C27-A4F4-3A89F506D6C2}.Debug|Win32.Build.0 = Debug|Win32
 		{DF58B03D-4C99-4C27-A4F4-3A89F506D6C2}.Release|Win32.ActiveCfg = Release|Win32
 		{DF58B03D-4C99-4C27-A4F4-3A89F506D6C2}.Test|Win32.ActiveCfg = Test|Win32
 		{DF58B03D-4C99-4C27-A4F4-3A89F506D6C2}.Test|Win32.Build.0 = Test|Win32
