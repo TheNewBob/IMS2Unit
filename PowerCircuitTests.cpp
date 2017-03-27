@@ -8,10 +8,12 @@
 #include "PowerConsumer.h"
 #include "PowerBus.h"
 #include "PowerSource.h"
+#include "PowerSourceChargable.h"
+#include "PowerCircuit_Base.h"
 #include "PowerCircuit.h"
 #include "PowerCircuitManager.h"
 #include "Calc.h"
-
+#include <time.h>
 
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 using namespace std;
@@ -170,7 +172,7 @@ namespace IMS2Unit
 
 			Logger::WriteMessage(L"Testing circuit evaluation at full load\n");
 			consumer->SetConsumerLoad(1);
-			manager->Evaluate();
+			manager->Evaluate(1);
 
 			vector<PowerCircuit*> circuits;
 			manager->GetPowerCircuits(circuits);
@@ -192,10 +194,13 @@ namespace IMS2Unit
 			Logger::WriteMessage(TestUtils::Msg("Current current output of powersource: " + Helpers::doubleToString(source->GetOutputCurrent()) + "\n"));
 			Assert::IsTrue(source->GetOutputCurrent() == circuit->GetCircuitCurrent(), L"Powersource does not have correct output current!");
 
+			Logger::WriteMessage(TestUtils::Msg("Current current flow through bus: " + Helpers::doubleToString(bus->GetCurrent()) + "\n"));
+			Assert::IsTrue(source->GetOutputCurrent() == bus->GetCurrent(), L"Incorrect current flowing through bus");
+
 
 			Logger::WriteMessage(L"Testing circuit evaluation at half load\n");
 			consumer->SetConsumerLoad(0.5);
-			circuit->Evaluate();
+			manager->Evaluate(1);
 
 			Logger::WriteMessage(TestUtils::Msg("current input of consumer at current voltage: " + Helpers::doubleToString(consumer->GetInputCurrent()) + "\n"));
 			Assert::IsTrue(consumer->GetInputCurrent() == 1.9230769230769230769230769230769, L"Consumer does not have correct input current!");
@@ -208,12 +213,241 @@ namespace IMS2Unit
 			Logger::WriteMessage(TestUtils::Msg("Current current output of powersource: " + Helpers::doubleToString(source->GetOutputCurrent()) + "\n"));
 			Assert::IsTrue(source->GetOutputCurrent() == circuit->GetCircuitCurrent(), L"Powersource does not have correct maximum output current!");
 
+			Logger::WriteMessage(TestUtils::Msg("Current current flow through bus: " + Helpers::doubleToString(bus->GetCurrent()) + "\n"));
+			Assert::IsTrue(source->GetOutputCurrent() == bus->GetCurrent(), L"Incorrect current flowing through bus");
+
+
 			Logger::WriteMessage(L"cleaning up test assets\n");
 			delete consumer;
 			delete source;
 			delete bus;
 			delete circuit;
 			delete manager;
+		}
+
+
+		BEGIN_TEST_METHOD_ATTRIBUTE(Power_SimpleCircuitDisconnectionTest)
+			TEST_DESCRIPTION(L"Tests removing a bus from a circuit.")
+		END_TEST_METHOD_ATTRIBUTE()
+
+		TEST_METHOD(Power_SimpleCircuitDisconnectionTest)
+		{
+			Logger::WriteMessage(L"\n\nTest: SimpleCircuitConnectionTest\n");
+
+			Logger::WriteMessage(L"Creating test assets\n");
+			PowerCircuitManager *manager = new PowerCircuitManager();
+			PowerConsumer *consumer1 = new PowerConsumer(15, 30, 100, 0);
+			PowerConsumer *consumer2 = new PowerConsumer(15, 30, 100, 0);
+			PowerBus *bus1 = new PowerBus(26, 1000, manager, 0);
+			PowerBus *bus2 = new PowerBus(26, 1000, manager, 0);
+			PowerSource *source = new PowerSource(15, 30, 200, 1, 0);
+
+			source->ConnectParentToChild(bus1);
+			bus1->ConnectParentToChild(bus2);
+			consumer1->ConnectChildToParent(bus1);
+			consumer2->ConnectChildToParent(bus2);
+			consumer1->SetConsumerLoad(1);
+			consumer2->SetConsumerLoad(1);
+
+			manager->Evaluate(1);
+
+			//disconnecting bus2
+			bus2->DisconnectChildFromParent(bus1);
+			manager->Evaluate(1);
+			
+			vector<PowerCircuit*> circuits;
+			manager->GetPowerCircuits(circuits);
+
+			Logger::WriteMessage(L"Testing circuits after disconnecting bus2\n");
+
+			Assert::IsTrue(circuits.size() == 2, L"Should have two circuits after disconnect!");
+			Assert::IsTrue(circuits[0]->GetCircuitCurrent() == 0, L"Incorrect current flowing through circuit 0 after disconnect (should be 0!)");
+			Assert::IsTrue(Calc::IsEqual(circuits[1]->GetCircuitCurrent(), 100 / 26.0), L"Incorrect current in circuit 1 after disconnect!");
+			Assert::IsTrue(source->GetCurrentPowerOutput() == 100, L"Incorrect power output of source (should be 100!)");
+
+			//reconnect the parts
+			bus1->ConnectParentToChild(bus2);
+			consumer2->SetConsumerLoad(1);
+			manager->Evaluate(1);
+
+			//disconnecting at bus 1
+			bus1->DisconnectChildFromParent(source);
+			manager->Evaluate(1);
+			manager->GetPowerCircuits(circuits);
+
+			Logger::WriteMessage(L"Testing circuits after disconnecting source from otherwise intact circuit.\n");
+
+			Assert::IsTrue(circuits.size() == 1, L"Should have one circuit after disconnecting source!");
+			Assert::IsTrue(circuits[0]->GetCircuitCurrent() == 0, L"Incorrect current flowing through circuit 0 after disconnecting source (should be 0!)");
+			Assert::IsTrue(source->GetCurrentPowerOutput() == 0, L"Incorrect power output of source (should be 0!)");
+
+
+		}
+
+
+		BEGIN_TEST_METHOD_ATTRIBUTE(Power_RechargableSourceTest)
+			TEST_DESCRIPTION(L"Tests if a chargable powersource behaves as expected.")
+		END_TEST_METHOD_ATTRIBUTE()
+
+		TEST_METHOD(Power_RechargableSourceTest)
+		{
+			Logger::WriteMessage(L"\n\nTest: Power_RechargableSourceTest\n");
+
+			Logger::WriteMessage(L"Creating test assets\n");
+			PowerCircuitManager *manager = new PowerCircuitManager();
+			PowerConsumer *consumer1 = new PowerConsumer(15, 30, 60, 0);
+			PowerBus *bus = new PowerBus(26, 1000, manager, 0);
+			PowerSourceChargable *chargablesource = new PowerSourceChargable(15, 30, 100, 200, 1000, 0.9, 1, 0, 0.2);
+			PowerSource *source = new PowerSource(15, 30, 300, 1, 0);
+
+			source->ConnectParentToChild(bus);
+			chargablesource->ConnectParentToChild(bus);
+			consumer1->ConnectChildToParent(bus);
+			source->SetParentSwitchedIn(false);
+
+			Logger::WriteMessage(L"Testing at full load\n");
+			consumer1->SetConsumerLoad(1);
+			manager->Evaluate(1);
+
+			Logger::WriteMessage(TestUtils::Msg("current output of chargable source at current voltage: " + Helpers::doubleToString(chargablesource->GetOutputCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(chargablesource->GetOutputCurrent(), 60 / 26.0), L"chargable source does not provide expected current!");
+			Assert::IsTrue(Calc::IsEqual(chargablesource->GetCharge(), 1000 - (60.0 / 3600000)), L"chargable source did not lose the expected amount of charge!");
+
+			Logger::WriteMessage(L"Testing running the source dry\n");
+			int seconds = 0; //one second already passed for the last evaluation
+			while (chargablesource->IsParentSwitchedIn() && seconds <= 60000)
+			{
+				seconds++;
+				manager->Evaluate(1000);
+			}
+
+			Assert::IsTrue(seconds == 60000, 
+						   TestUtils::Msg("chargable source should have been able to provide power for exactly 60000 seconds, instead provided for " + Helpers::intToString(seconds) + " seconds\n"));
+			Assert::IsFalse(chargablesource->IsParentSwitchedIn(), L"Chargable source did not stop providing power as expected!");
+			Assert::IsTrue(chargablesource->IsChildSwitchedIn(), L"Chargable source did not switch to charging as expected!");
+			Assert::IsTrue(chargablesource->GetConsumerLoad() == 1, L"Chargable source is not demanding maximum power to recharge!");
+
+			Logger::WriteMessage(L"Testing depleted source behavior when no current available\n");
+
+			manager->Evaluate(1);
+			//Assert::IsTrue(chargablesource->GetConsumerLoad() == 0, L"")
+			Assert::IsTrue(chargablesource->GetInputCurrent() == 0, L"Chargable source is magically getting power from somewhere!");
+			Assert::IsTrue(chargablesource->GetCharge() == 0.0, L"Chargable source has somehow acumulated charge although none is available!");
+			Assert::IsFalse(chargablesource->IsRunning(), L"Chargable source still thinks it is running!");
+			manager->Evaluate(1000);
+			Assert::IsTrue(chargablesource->GetInputCurrent() == 0, L"Chargable source is magically getting power from somewhere after large timestep!");
+			Assert::IsTrue(chargablesource->GetCharge() == 0.0, L"Chargable source has somehow acumulated charge over large timestep although none is available!");
+			Assert::IsFalse(chargablesource->IsParentSwitchedIn(), L"Chargable source switched to providing without respecting autoswitch threshold!");
+			Assert::IsFalse(chargablesource->IsRunning(), L"Chargable source still thinks it is running!");
+
+			Logger::WriteMessage(L"Testing charging the source\n");
+
+			//somebody else will have to provide the power...
+			source->SetParentSwitchedIn(true);
+			manager->Evaluate(1000);
+
+			Assert::IsTrue(Calc::IsEqual(chargablesource->GetCurrentPowerConsumption(), chargablesource->GetMaxPowerConsumption()), L"chargable source is not consuming correct amount of power!");
+			Assert::IsTrue(Calc::IsEqual(chargablesource->GetCharge(), chargablesource->GetCurrentPowerConsumption() / 3600 * chargablesource->GetChargingEfficiency()), L"chargable source has not charged by the correct amount after one second!");
+			seconds = 0;
+			while (chargablesource->IsChildSwitchedIn() && seconds <= 20000)
+			{
+				seconds++;
+				manager->Evaluate(1000);
+			}
+
+			Assert::IsTrue(seconds == 20000, L"Recharging did not take the proper amount of time!");
+			Assert::IsTrue(Calc::IsEqual(chargablesource->GetCharge(), chargablesource->GetMaxCharge()), L"chargable source did not fully recharge!");
+			Assert::IsFalse(chargablesource->IsChildSwitchedIn(), L"chargable source did not stop charging when fully recharged!");
+			Assert::IsFalse(chargablesource->IsParentSwitchedIn(), L"chargable source should not start providing power unless needed!");
+
+			//run the source half dry again.
+			source->SetParentSwitchedIn(false);
+			seconds = 0; //one second already passed for the last evaluation
+			while (seconds < 30000)
+			{
+				seconds++;
+				manager->Evaluate(1000);
+			}
+
+			Assert::IsTrue(Calc::IsEqual(chargablesource->GetCharge(), chargablesource->GetMaxCharge() / 2), L"chargable source should be halfways charged!");
+
+			//turn of autoswitch and switch out the source
+			chargablesource->SetAutoswitchEnabled(false);
+			chargablesource->SetParentSwitchedIn(false);
+			manager->Evaluate(1000);
+
+			Assert::IsFalse(chargablesource->IsParentSwitchedIn(), L"Chargable source should not have started providing power with autoswitch off!");
+			Assert::IsFalse(chargablesource->IsChildSwitchedIn(), L"Chargable source should not have started charging without power!");
+			Assert::IsTrue(Calc::IsEqual(chargablesource->GetCharge(), chargablesource->GetMaxCharge() / 2), L"chargable source should not have changed charge since last evaluation!");
+			Assert::IsFalse(consumer1->IsRunning(), L"consumer1 should not be receiving current!");
+
+			//switch in other powersource
+			source->SetParentSwitchedIn(true);
+			manager->Evaluate(1000);
+
+			Assert::IsFalse(chargablesource->IsChildSwitchedIn(), L"Chargable source should not have started charging with autoswitch off!");
+			Assert::IsTrue(Calc::IsEqual(chargablesource->GetCharge(), chargablesource->GetMaxCharge() / 2), L"chargable source should not have changed charge since last evaluation!");
+			Assert::IsTrue(consumer1->IsRunning(), L"consumer1 should be receiving current!");
+
+			//force charging
+			chargablesource->SetToCharging();
+			manager->Evaluate(1000);
+			Assert::IsTrue(chargablesource->IsChildSwitchedIn(), L"Chargable source should have started charging!");
+			source->SetParentSwitchedIn(false);
+			manager->Evaluate(1000);
+			Assert::IsTrue(chargablesource->IsChildSwitchedIn(), L"Chargable source should have kept charger switched in!");
+			Assert::IsFalse(chargablesource->IsRunning(), L"Chargable source hould not have current to charge!");
+
+		}
+
+
+		BEGIN_TEST_METHOD_ATTRIBUTE(Power_SimpleOverloadTest)
+			TEST_DESCRIPTION(L"Tests if a circuit behaves correctly when there's not enough power available.")
+		END_TEST_METHOD_ATTRIBUTE()
+
+		TEST_METHOD(Power_SimpleOverloadTest)
+		{
+			Logger::WriteMessage(L"\n\nTest: SimpleOverloadTest\n");
+
+			Logger::WriteMessage(L"Creating test assets\n");
+			PowerCircuitManager *manager = new PowerCircuitManager();
+			PowerConsumer *consumer1 = new PowerConsumer(15, 30, 60, 0);
+			PowerConsumer *consumer2 = new PowerConsumer(15, 30, 60, 0);
+			PowerConsumer *consumer3 = new PowerConsumer(15, 30, 60, 0);
+			PowerConsumer *consumer4 = new PowerConsumer(15, 30, 60, 0);
+			PowerConsumer *consumer5 = new PowerConsumer(15, 30, 60, 0);
+			PowerBus *bus = new PowerBus(26, 1000, manager, 0);
+			PowerSource *source = new PowerSource(15, 30, 200, 1, 0);
+
+			source->ConnectParentToChild(bus);
+			consumer1->ConnectChildToParent(bus);
+			consumer2->ConnectChildToParent(bus);
+			consumer3->ConnectChildToParent(bus);
+			consumer4->ConnectChildToParent(bus);
+			consumer5->ConnectChildToParent(bus);
+
+			Logger::WriteMessage(L"Testing overload at full load\n");
+			consumer1->SetConsumerLoad(1);
+			consumer2->SetConsumerLoad(1);
+			consumer3->SetConsumerLoad(1);
+			consumer4->SetConsumerLoad(1);
+			consumer5->SetConsumerLoad(1);
+			manager->Evaluate(1);
+
+			Assert::IsTrue(consumer1->GetConsumerLoad() == 1.0 &&
+				consumer1->GetConsumerLoad() == 1.0 &&
+				consumer1->GetConsumerLoad() == 1.0, L"Consumers 1 through 3 should run at maximum load!");
+
+			Assert::IsFalse(consumer5->IsRunning(), L"Consumer5 should be completely out of power!");
+			Logger::WriteMessage(TestUtils::Msg("Current consumption of consumer4: " + Helpers::doubleToString(consumer4->GetCurrentPowerConsumption()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(consumer4->GetCurrentPowerConsumption(), 20), L"Consumer4 does not consume correct amount of power!");
+			Assert::IsTrue(Calc::IsEqual(consumer4->GetConsumerLoad(), 0.333333333), L"Consumer4 does not have correct load!");
+
+			vector<PowerCircuit*> circuits;
+			manager->GetPowerCircuits(circuits);
+			Logger::WriteMessage(TestUtils::Msg("Total circuit power: " + Helpers::doubleToString(circuits[0]->GetCircuitCurrent() * circuits[0]->GetVoltage()) + "\n"));
+			Assert::IsTrue(circuits[0]->GetCircuitCurrent() * circuits[0]->GetVoltage() == 200, L"Circuit has wrong amount of power flowing through it!");
+			Assert::IsTrue(source->GetCurrentPowerOutput() == 200, L"Source has wrong power output!");
 		}
 
 
@@ -333,7 +567,7 @@ namespace IMS2Unit
 			Assert::IsTrue(manager->GetSize() == 1, L"PowerCircuitManager should only have 1 circuit at this point!");
 
 
-			Logger::WriteMessage(L"Setting consumer loads\n");
+			Logger::WriteMessage(L"Testing at load 0.5\n");
 			//for a first test, we'll drive all consumers at 50%
 			c1->SetConsumerLoad(0.5);
 			c2->SetConsumerLoad(0.5);
@@ -351,7 +585,7 @@ namespace IMS2Unit
 
 			Logger::WriteMessage(L"Testing circuit evaluation\n");
 		
-			manager->Evaluate();
+			manager->Evaluate(1);
 			vector<PowerCircuit*> circuits;
 			manager->GetPowerCircuits(circuits);
 			PowerCircuit *circuit = circuits[0];
@@ -360,7 +594,7 @@ namespace IMS2Unit
 			Logger::WriteMessage(TestUtils::Msg("Total current in circuit: " + Helpers::doubleToString(circuit->GetCircuitCurrent()) + "\n"));
 
 			Assert::IsTrue(circuit->GetCircuitCurrent() == 19, L"Circuit current is incorrect!");
-			Assert::IsTrue(circuit->GetEquivalentResistance() == 0.52631578947368418, L"Equivalent resistance of circuit is incorrect!");
+			Assert::IsTrue(Calc::IsEqual(circuit->GetEquivalentResistance(), 0.52631578947368418), L"Equivalent resistance of circuit is incorrect!");
 
 
 			Logger::WriteMessage(TestUtils::Msg("Current current output of S1: " + Helpers::doubleToString(s1->GetOutputCurrent()) + "\n"));
@@ -372,12 +606,92 @@ namespace IMS2Unit
 			Logger::WriteMessage(TestUtils::Msg("Current current output of S4: " + Helpers::doubleToString(s4->GetOutputCurrent()) + "\n"));
 			Assert::IsTrue(s4->GetOutputCurrent() == 2.7142857142857144, L"Power output of S4 is incorrect!");
 
+			
+			Logger::WriteMessage(L"Testing current distribution\n");
 
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B1 is: " + Helpers::doubleToString(b1->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b1->GetCurrent(), 10.857142857142858), L"Current throughput of b1 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B2 is: " + Helpers::doubleToString(b2->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b2->GetCurrent(), 6.5), L"Current throughput of b2 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B3 is: " + Helpers::doubleToString(b3->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b3->GetCurrent(), 9.3571428571), L"Current throughput of b3 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B4 is: " + Helpers::doubleToString(b4->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b4->GetCurrent(), 5.0714285714), L"Current throughput of b4 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B5 is: " + Helpers::doubleToString(b5->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b5->GetCurrent(), 5.5), L"Current throughput of b5 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B6 is: " + Helpers::doubleToString(b6->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b6->GetCurrent(), 8.5714285714), L"Current throughput of b6 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B7 is: " + Helpers::doubleToString(b7->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b7->GetCurrent(), 2.7142857143), L"Current throughput of b7 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B8 is: " + Helpers::doubleToString(b8->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b8->GetCurrent(), 1), L"Current throughput of b8 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B9 is: " + Helpers::doubleToString(b9->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b9->GetCurrent(), 2.5), L"Current throughput of b9 is incorrect!");
+
+
+			Logger::WriteMessage(L"Testing at load 0.9\n");
+			//for a first test, we'll drive all consumers at 50%
+			c1->SetConsumerLoad(0.9);
+			c2->SetConsumerLoad(0.9);
+			c3->SetConsumerLoad(0.9);
+			c4->SetConsumerLoad(0.9);
+			c5->SetConsumerLoad(0.9);
+			c6->SetConsumerLoad(0.9);
+			c7->SetConsumerLoad(0.9);
+			c8->SetConsumerLoad(0.9);
+			c9->SetConsumerLoad(0.9);
+			c10->SetConsumerLoad(0.9);
+			c11->SetConsumerLoad(0.9);
+			c12->SetConsumerLoad(0.9);
+			c13->SetConsumerLoad(0.9);
+
+			Logger::WriteMessage(L"Testing circuit evaluation\n");
+
+			
+			manager->Evaluate(1);
+			manager->GetPowerCircuits(circuits);
+			circuit = circuits[0];
+
+			Logger::WriteMessage(TestUtils::Msg("equivalent resistance of circuit: " + Helpers::doubleToString(circuit->GetEquivalentResistance()) + "\n"));
+			Logger::WriteMessage(TestUtils::Msg("Total current in circuit: " + Helpers::doubleToString(circuit->GetCircuitCurrent()) + "\n"));
+
+			Assert::IsTrue(circuit->GetCircuitCurrent() == 34.2, L"Circuit current is incorrect!");
+			Assert::IsTrue(Calc::IsEqual(circuit->GetEquivalentResistance(), 0.2923976608), L"Equivalent resistance of circuit is incorrect!");
+
+
+			Logger::WriteMessage(TestUtils::Msg("Current current output of S1: " + Helpers::doubleToString(s1->GetOutputCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(s1->GetOutputCurrent(), 19.5428571429), L"Power output of S1 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current current output of S2 " + Helpers::doubleToString(s2->GetOutputCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(s2->GetOutputCurrent(), 4.8857142857), L"Power output of S2 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current current output of S3: " + Helpers::doubleToString(s3->GetOutputCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(s3->GetOutputCurrent(), 4.8857142857), L"Power output of S3 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current current output of S4: " + Helpers::doubleToString(s4->GetOutputCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(s4->GetOutputCurrent(), 4.8857142857), L"Power output of S4 is incorrect!");
+
+
+			Logger::WriteMessage(L"Testing current distribution\n");
+
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B1 is: " + Helpers::doubleToString(b1->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b1->GetCurrent(), 19.5428571429), L"Current throughput of b1 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B2 is: " + Helpers::doubleToString(b2->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b2->GetCurrent(), 11.7), L"Current throughput of b2 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B3 is: " + Helpers::doubleToString(b3->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b3->GetCurrent(), 16.8428571429), L"Current throughput of b3 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B4 is: " + Helpers::doubleToString(b4->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b4->GetCurrent(), 9.1285714286), L"Current throughput of b4 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B5 is: " + Helpers::doubleToString(b5->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b5->GetCurrent(), 9.9), L"Current throughput of b5 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B6 is: " + Helpers::doubleToString(b6->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b6->GetCurrent(), 15.4285714286), L"Current throughput of b6 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B7 is: " + Helpers::doubleToString(b7->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b7->GetCurrent(), 4.8857142857), L"Current throughput of b7 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B8 is: " + Helpers::doubleToString(b8->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b8->GetCurrent(), 1.8), L"Current throughput of b8 is incorrect!");
+			Logger::WriteMessage(TestUtils::Msg("Current throughput of B9 is: " + Helpers::doubleToString(b9->GetCurrent()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(b9->GetCurrent(), 4.5), L"Current throughput of b9 is incorrect!");
 
 
 			Logger::WriteMessage(L"Cleaning up test assets");
-
-
 		}
 	};
 }
