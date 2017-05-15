@@ -9,6 +9,7 @@
 #include "PowerBus.h"
 #include "PowerSource.h"
 #include "PowerSourceChargable.h"
+#include "PowerConverter.h"
 #include "PowerCircuit_Base.h"
 #include "PowerCircuit.h"
 #include "PowerCircuitManager.h"
@@ -400,6 +401,79 @@ namespace IMS2Unit
 
 		}
 
+
+		BEGIN_TEST_METHOD_ATTRIBUTE(Power_ConverterTest)
+			TEST_DESCRIPTION(L"Tests if two circuits of different voltages connected by a converter behave as intended.")
+		END_TEST_METHOD_ATTRIBUTE()
+
+		TEST_METHOD(Power_ConverterTest)
+		{
+			Logger::WriteMessage(L"\n\nTest: Power_ConverterTest\n");
+
+			Logger::WriteMessage(L"Creating test assets\n");
+			PowerCircuitManager *manager = new PowerCircuitManager();
+
+			PowerSource *source = new PowerSource(110, 130, 1000, 1, 0);
+			PowerBus *bus2 = new PowerBus(120, 1000, manager, 0);
+			PowerConsumer *consumer3 = new PowerConsumer(15, 30, 60, 0);
+			PowerConsumer *consumer4 = new PowerConsumer(15, 30, 60, 0);
+			PowerConsumer *consumer5 = new PowerConsumer(15, 30, 800, 0);
+
+			source->ConnectParentToChild(bus2);
+			bus2->ConnectParentToChild(consumer5);
+			bus2->ConnectParentToChild(consumer3);
+			bus2->ConnectParentToChild(consumer4);
+
+			PowerBus *bus1 = new PowerBus(26, 1000, manager, 0);
+			PowerConsumer *consumer1 = new PowerConsumer(15, 30, 60, 0);
+			PowerConsumer *consumer2 = new PowerConsumer(15, 30, 60, 0);
+
+			bus1->ConnectParentToChild(consumer1);
+			bus1->ConnectParentToChild(consumer2);
+
+			PowerConverter *converter = new PowerConverter(20, 130, 1000, 0.9, 1, 0);
+			bus2->ConnectParentToChild(converter);
+			bus1->ConnectChildToParent(converter);
+			
+			Logger::WriteMessage(L"Testing with balanced circuit.\n");
+
+			consumer1->SetConsumerLoad(1);
+			consumer2->SetConsumerLoad(1);
+			consumer3->SetConsumerLoad(1);
+			consumer4->SetConsumerLoad(1);
+			consumer5->SetConsumerLoad(0);
+			
+			manager->Evaluate(1);
+			manager->Evaluate(1);
+
+			Logger::WriteMessage(TestUtils::Msg("current power output of source: " + Helpers::doubleToString(source->GetCurrentPowerOutput()) + "\n"));
+			Assert::IsTrue(Calc::IsEqual(source->GetCurrentPowerOutput(), 240.8), L"Incorrect amount of power drawn from source!");
+			Assert::IsTrue(Calc::IsEqual(converter->GetCurrentPowerOutput(), converter->GetCurrentPowerConsumption() * converter->GetConversionEfficiency()), L"Congratulations, you're violating conservation of energy!");
+			Assert::IsTrue(Calc::IsEqual(converter->GetInputCurrent(), (120.0 / converter->GetConversionEfficiency()) / 120), L"Incorrect input current!");
+			Assert::IsTrue(Calc::IsEqual(converter->GetOutputCurrent(), 4.615384615384615), L"Incorrect output current!");
+			Assert::IsTrue(Calc::IsEqual(consumer1->GetConsumerLoad(), 1.0), L"Consumer1 has incorrect load!");
+			Assert::IsTrue(Calc::IsEqual(consumer2->GetConsumerLoad(), 1.0), L"Consumer2 has incorrect load!");
+
+
+			Logger::WriteMessage(L"Testing with overburdened circuit.\n");
+			consumer5->SetConsumerLoad(1);
+			manager->Evaluate(1);
+			manager->Evaluate(1);
+
+			Assert::IsTrue(Calc::IsEqual(source->GetCurrentPowerOutput(), 1000), L"Incorrect amount of power drawn from source!");
+			Assert::IsTrue(Calc::IsEqual(consumer1->GetConsumerLoad(), 1.0), L"Consumer1 has incorrect load in overburdened Circuit!");
+			Assert::IsTrue(Calc::IsEqual(consumer2->GetConsumerLoad(), 0.2), L"Consumer2 has incorrect load in overburdened Circuit!");
+			Assert::IsTrue(Calc::IsEqual(consumer3->GetConsumerLoad(), 1), L"Consumer3 has incorrect load in overburdened Circuit!");
+			Assert::IsTrue(Calc::IsEqual(consumer4->GetConsumerLoad(), 1), L"Consumer4 has incorrect load in overburdened Circuit!");
+			Assert::IsTrue(Calc::IsEqual(consumer5->GetConsumerLoad(), 1), L"Consumer5 has incorrect load in overburdened Circuit!");
+
+			vector<PowerCircuit*> circuits;
+			manager->GetPowerCircuits(circuits);
+			
+			Assert::IsTrue(Calc::IsEqual(circuits[0]->GetCircuitCurrent(), 8.333333333), L"Circuit 1 has incorrect current!");
+			Assert::IsTrue(Calc::IsEqual(circuits[1]->GetCircuitCurrent(), 3.076923076923), L"Circuit 1 has incorrect current!");
+
+		}
 
 		BEGIN_TEST_METHOD_ATTRIBUTE(Power_SimpleOverloadTest)
 			TEST_DESCRIPTION(L"Tests if a circuit behaves correctly when there's not enough power available.")
